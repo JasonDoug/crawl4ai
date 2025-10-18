@@ -1,5 +1,6 @@
 """Content scraper implementation using lxml and BeautifulSoup."""
 
+import copy
 import logging
 import re
 from typing import Any, Dict, List, Optional, Set
@@ -136,8 +137,8 @@ class ContentScraper:
         Returns:
             Extracted text
         """
-        # Clone tree to avoid modifying original
-        tree = etree.ElementTree(tree).getroot()
+        # Deep copy tree to avoid modifying original
+        tree = copy.deepcopy(tree)
 
         # Remove unwanted elements
         for selector in self._exclude_selectors:

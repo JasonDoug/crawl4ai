@@ -157,11 +157,13 @@ class BrowserManager:
 
         Args:
             session_id: Session ID to close
+
+        Raises:
+            ValueError: If session_id is not found
         """
         async with self._sessions_lock:
             if session_id not in self._sessions:
-                logger.warning(f"Session not found: {session_id}")
-                return
+                raise ValueError(f"Session not found: {session_id}")
 
             session_info = self._sessions[session_id]
 
