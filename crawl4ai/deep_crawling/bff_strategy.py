@@ -11,6 +11,7 @@ from .scorers import URLScorer
 from . import DeepCrawlStrategy
 
 from ..types import AsyncWebCrawler, CrawlerRunConfig, CrawlResult, RunManyReturn
+from ..utils import normalize_url_for_deep_crawl
 
 from math import inf as infinity
 
@@ -106,13 +107,14 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
         valid_links = []
         for link in links:
             url = link.get("href")
-            if url in visited:
+            base_url = normalize_url_for_deep_crawl(url, source_url)
+            if base_url in visited:
                 continue
             if not await self.can_process_url(url, new_depth):
                 self.stats.urls_skipped += 1
                 continue
                 
-            valid_links.append(url)
+            valid_links.append(base_url)
             
         # If we have more valid links than capacity, limit them
         if len(valid_links) > remaining_capacity:
@@ -145,6 +147,14 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
         while not queue.empty() and not self._cancel_event.is_set():
             # Stop if we've reached the max pages limit
             if self._pages_crawled >= self.max_pages:
+                self.logger.info(f"Max pages limit ({self.max_pages}) reached, stopping crawl")
+                break
+                
+            # Calculate how many more URLs we can process in this batch
+            remaining = self.max_pages - self._pages_crawled
+            batch_size = min(BATCH_SIZE, remaining)
+            if batch_size <= 0:
+                # No more pages to crawl
                 self.logger.info(f"Max pages limit ({self.max_pages}) reached, stopping crawl")
                 break
                 
@@ -182,6 +192,10 @@ class BestFirstCrawlingStrategy(DeepCrawlStrategy):
                 # Count only successful crawls toward max_pages limit
                 if result.success:
                     self._pages_crawled += 1
+                    # Check if we've reached the limit during batch processing
+                    if self._pages_crawled >= self.max_pages:
+                        self.logger.info(f"Max pages limit ({self.max_pages}) reached during batch, stopping crawl")
+                        break  # Exit the generator
                 
                 yield result
                 

@@ -1,3 +1,6 @@
+# Scripts folder (private tools)
+.scripts/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -195,6 +198,13 @@ update_changelog.sh
 docs/.DS_Store
 tmp/
 test_env/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Backup/copy files
+* copy.py
+*\ copy.py
 **/.DS_Store
 **/.DS_Store
 
@@ -258,3 +268,13 @@ continue_config.json
 
 CLAUDE_MONITOR.md
 CLAUDE.md
+
+tests/**/test_site
+tests/**/reports
+tests/**/benchmark_reports
+
+docs/**/data
+.codecat/
+
+docs/apps/linkdin/debug*/
+docs/apps/linkdin/samples/insights/*

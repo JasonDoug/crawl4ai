@@ -111,13 +111,71 @@ Some commonly used `options`:
 - **`skip_internal_links`** (bool): If `True`, omit `#localAnchors` or internal links referencing the same page.  
 - **`include_sup_sub`** (bool): Attempt to handle `<sup>` / `<sub>` in a more readable way.
 
+## 4. Selecting the HTML Source for Markdown Generation
+
+The `content_source` parameter allows you to control which HTML content is used as input for markdown generation. This gives you flexibility in how the HTML is processed before conversion to markdown.
+
+```python
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+
+async def main():
+    # Option 1: Use the raw HTML directly from the webpage (before any processing)
+    raw_md_generator = DefaultMarkdownGenerator(
+        content_source="raw_html",
+        options={"ignore_links": True}
+    )
+    
+    # Option 2: Use the cleaned HTML (after scraping strategy processing - default)
+    cleaned_md_generator = DefaultMarkdownGenerator(
+        content_source="cleaned_html",  # This is the default
+        options={"ignore_links": True}
+    )
+    
+    # Option 3: Use preprocessed HTML optimized for schema extraction
+    fit_md_generator = DefaultMarkdownGenerator(
+        content_source="fit_html",
+        options={"ignore_links": True}
+    )
+    
+    # Use one of the generators in your crawler config
+    config = CrawlerRunConfig(
+        markdown_generator=raw_md_generator  # Try each of the generators
+    )
+    
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun("https://example.com", config=config)
+        if result.success:
+            print("Markdown:\n", result.markdown.raw_markdown[:500])
+        else:
+            print("Crawl failed:", result.error_message)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+### HTML Source Options
+
+- **`"cleaned_html"`** (default): Uses the HTML after it has been processed by the scraping strategy. This HTML is typically cleaner and more focused on content, with some boilerplate removed.
+
+- **`"raw_html"`**: Uses the original HTML directly from the webpage, before any cleaning or processing. This preserves more of the original content, but may include navigation bars, ads, footers, and other elements that might not be relevant to the main content.
+
+- **`"fit_html"`**: Uses HTML preprocessed for schema extraction. This HTML is optimized for structured data extraction and may have certain elements simplified or removed.
+
+### When to Use Each Option
+
+- Use **`"cleaned_html"`** (default) for most cases where you want a balance of content preservation and noise removal.
+- Use **`"raw_html"`** when you need to preserve all original content, or when the cleaning process is removing content you actually want to keep.
+- Use **`"fit_html"`** when working with structured data or when you need HTML that's optimized for schema extraction.
+
 ---
 
-## 4. Content Filters
+## 5. Content Filters
 
 **Content filters** selectively remove or rank sections of text before turning them into Markdown. This is especially helpful if your page has ads, nav bars, or other clutter you don’t want.
 
-### 4.1 BM25ContentFilter
+### 5.1 BM25ContentFilter
 
 If you have a **search query**, BM25 is a good choice:
 
@@ -129,7 +187,7 @@ from crawl4ai import CrawlerRunConfig
 bm25_filter = BM25ContentFilter(
     user_query="machine learning",
     bm25_threshold=1.2,
-    use_stemming=True
+    language="english"
 )
 
 md_generator = DefaultMarkdownGenerator(
@@ -142,11 +200,12 @@ config = CrawlerRunConfig(markdown_generator=md_generator)
 
 - **`user_query`**: The term you want to focus on. BM25 tries to keep only content blocks relevant to that query.  
 - **`bm25_threshold`**: Raise it to keep fewer blocks; lower it to keep more.  
-- **`use_stemming`**: If `True`, variations of words match (e.g., “learn,” “learning,” “learnt”).
+- **`use_stemming`** *(default `True`)*: Whether to apply stemming to the query and content.
+- **`language (str)`**: Language for stemming (default: 'english').
 
 **No query provided?** BM25 tries to glean a context from page metadata, or you can simply treat it as a scorched-earth approach that discards text with low generic score. Realistically, you want to supply a query for best results.
 
-### 4.2 PruningContentFilter
+### 5.2 PruningContentFilter
 
 If you **don’t** have a specific query, or if you just want a robust “junk remover,” use `PruningContentFilter`. It analyzes text density, link density, HTML structure, and known patterns (like “nav,” “footer”) to systematically prune extraneous or repetitive sections.
 
@@ -170,12 +229,12 @@ prune_filter = PruningContentFilter(
 - You want a broad cleanup without a user query.  
 - The page has lots of repeated sidebars, footers, or disclaimers that hamper text extraction.
 
-### 4.3 LLMContentFilter
+### 5.3 LLMContentFilter
 
 For intelligent content filtering and high-quality markdown generation, you can use the **LLMContentFilter**. This filter leverages LLMs to generate relevant markdown while preserving the original content's meaning and structure:
 
 ```python
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LLMConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LLMConfig, DefaultMarkdownGenerator
 from crawl4ai.content_filter_strategy import LLMContentFilter
 
 async def main():
@@ -197,9 +256,12 @@ async def main():
         chunk_token_threshold=4096,  # Adjust based on your needs
         verbose=True
     )
-
+    md_generator = DefaultMarkdownGenerator(
+        content_filter=filter,
+        options={"ignore_links": True}
+    )
     config = CrawlerRunConfig(
-        content_filter=filter
+        markdown_generator=md_generator,
     )
 
     async with AsyncWebCrawler() as crawler:
@@ -247,7 +309,7 @@ filter = LLMContentFilter(
 
 ---
 
-## 5. Using Fit Markdown
+## 6. Using Fit Markdown
 
 When a content filter is active, the library produces two forms of markdown inside `result.markdown`:
 
@@ -284,7 +346,7 @@ if __name__ == "__main__":
 
 ---
 
-## 6. The `MarkdownGenerationResult` Object
+## 7. The `MarkdownGenerationResult` Object
 
 If your library stores detailed markdown output in an object like `MarkdownGenerationResult`, you’ll see fields such as:
 
@@ -315,7 +377,7 @@ Below is a **revised section** under “Combining Filters (BM25 + Pruning)” th
 
 ---
 
-## 7. Combining Filters (BM25 + Pruning) in Two Passes
+## 8. Combining Filters (BM25 + Pruning) in Two Passes
 
 You might want to **prune out** noisy boilerplate first (with `PruningContentFilter`), and then **rank what’s left** against a user query (with `BM25ContentFilter`). You don’t have to crawl the page twice. Instead:
 
@@ -407,7 +469,7 @@ If your codebase or pipeline design allows applying multiple filters in one pass
 
 ---
 
-## 8. Common Pitfalls & Tips
+## 9. Common Pitfalls & Tips
 
 1. **No Markdown Output?**  
    - Make sure the crawler actually retrieved HTML. If the site is heavily JS-based, you may need to enable dynamic rendering or wait for elements.  
@@ -427,11 +489,12 @@ If your codebase or pipeline design allows applying multiple filters in one pass
 
 ---
 
-## 9. Summary & Next Steps
+## 10. Summary & Next Steps
 
 In this **Markdown Generation Basics** tutorial, you learned to:
 
 - Configure the **DefaultMarkdownGenerator** with HTML-to-text options.  
+- Select different HTML sources using the `content_source` parameter.  
 - Use **BM25ContentFilter** for query-specific extraction or **PruningContentFilter** for general noise removal.  
 - Distinguish between raw and filtered markdown (`fit_markdown`).  
 - Leverage the `MarkdownGenerationResult` object to handle different forms of output (citations, references, etc.).
