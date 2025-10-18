@@ -148,56 +148,102 @@ class PDFContentScrapingStrategy(ContentScrapingStrategy):
         return await asyncio.to_thread(self.scrap, url, html, **kwargs)
 
     def _get_pdf_path(self, url: str) -> str:
+        # Max PDF size: 100 MB
+        MAX_PDF_BYTES = 100 * 1024 * 1024
+
         if url.startswith(("http://", "https://")):
             import tempfile
             import requests
 
-            # Create temp file with .pdf extension
+            # Create temp file with .pdf extension and immediately close it
+            # (required for Windows compatibility - allows reopening)
             temp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-            self._temp_files.append(temp_file.name)
+            temp_path = temp_file.name
+            temp_file.close()
+
+            # Track temp file for cleanup
+            self._temp_files.append(temp_path)
 
             try:
                 if self.logger:
                     self.logger.info(f"Downloading PDF from {url}...")
 
-                # Download PDF with streaming and timeout
-                # Connection timeout: 10s, Read timeout: 300s (5 minutes for large PDFs)
-                response = requests.get(url, stream=True, timeout=(20, 60 * 10))
-                response.raise_for_status()
+                # Download PDF with streaming, timeout, and context manager
+                # Connection timeout: 20s, Read timeout: 600s (10 minutes for large PDFs)
+                with requests.get(url, stream=True, timeout=(20, 60 * 10)) as response:
+                    response.raise_for_status()
 
-                # Get file size if available
-                total_size = int(response.headers.get("content-length", 0))
-                downloaded = 0
+                    # Validate content type
+                    content_type = response.headers.get("content-type", "").lower()
+                    if "pdf" not in content_type:
+                        raise ValueError(
+                            f"URL does not point to a PDF file (Content-Type: {content_type})"
+                        )
 
-                # Write to temp file
-                with open(temp_file.name, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if self.logger and total_size > 0:
-                            progress = (downloaded / total_size) * 100
-                            if progress % 10 < 0.1:  # Log every 10%
-                                self.logger.debug(
-                                    f"PDF download progress: {progress:.0f}%"
-                                )
+                    # Check content length and enforce size limit
+                    content_length = response.headers.get("content-length")
+                    if content_length:
+                        total_size = int(content_length)
+                        if total_size > MAX_PDF_BYTES:
+                            raise ValueError(
+                                f"PDF file too large: {total_size / (1024 * 1024):.1f} MB "
+                                f"(max: {MAX_PDF_BYTES / (1024 * 1024):.0f} MB)"
+                            )
+                    else:
+                        total_size = 0
+
+                    # Stream download with progress logging
+                    downloaded = 0
+                    last_logged_percent = -10  # Initialize to ensure first log at 0%
+
+                    with open(temp_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+
+                                # Enforce max size during download
+                                if downloaded > MAX_PDF_BYTES:
+                                    raise ValueError(
+                                        f"PDF download exceeded size limit: "
+                                        f"{downloaded / (1024 * 1024):.1f} MB"
+                                    )
+
+                                # Log progress every 10%
+                                if self.logger and total_size > 0:
+                                    percent = int((downloaded / total_size) * 100)
+                                    if percent >= last_logged_percent + 10:
+                                        self.logger.debug(
+                                            f"PDF download progress: {percent}%"
+                                        )
+                                        last_logged_percent = percent
 
                 if self.logger:
-                    self.logger.info(f"PDF downloaded successfully: {temp_file.name}")
+                    self.logger.info(
+                        f"PDF downloaded successfully: {temp_path} "
+                        f"({downloaded / 1024:.1f} KB)"
+                    )
 
-                return temp_file.name
+                return temp_path
 
-            except requests.exceptions.Timeout as e:
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.RequestException,
+                ValueError,
+                IOError,
+            ) as e:
                 # Clean up temp file if download fails
-                Path(temp_file.name).unlink(missing_ok=True)
-                if temp_file.name in self._temp_files:
-                    self._temp_files.remove(temp_file.name)
-                raise RuntimeError(f"Timeout downloading PDF from {url}") from e
-            except requests.exceptions.RequestException as e:
-                # Clean up temp file if download fails
-                Path(temp_file.name).unlink(missing_ok=True)
-                if temp_file.name in self._temp_files:
-                    self._temp_files.remove(temp_file.name)
-                raise RuntimeError(f"Failed to download PDF from {url}") from e
+                Path(temp_path).unlink(missing_ok=True)
+                if temp_path in self._temp_files:
+                    self._temp_files.remove(temp_path)
+
+                # Re-raise with appropriate error type
+                if isinstance(e, requests.exceptions.Timeout):
+                    raise RuntimeError(f"Timeout downloading PDF from {url}") from e
+                elif isinstance(e, ValueError):
+                    raise RuntimeError(f"Invalid PDF: {e}") from e
+                else:
+                    raise RuntimeError(f"Failed to download PDF from {url}") from e
 
         elif url.startswith("file://"):
             return url[7:]  # Strip file:// prefix
