@@ -99,8 +99,8 @@ class BrowserManager:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.error(f"Error in session cleanup: {e}")
+            except Exception:
+                logger.exception("Error in session cleanup")
 
     def active_count(self) -> int:
         """Get count of active pages."""
