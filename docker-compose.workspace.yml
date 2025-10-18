@@ -46,6 +46,22 @@ services:
     networks:
       - crawl4ai-network
 
+  # Deep Crawling Service
+  deep-crawl-service:
+    build:
+      context: .
+      dockerfile: services/deep-crawl-service/Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      - LOG_LEVEL=INFO
+    depends_on:
+      - browser-service
+      - content-scraping-service
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
   # Redis for caching and message queue
   redis:
     image: redis:7-alpine
