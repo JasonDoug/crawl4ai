@@ -198,6 +198,13 @@ update_changelog.sh
 docs/.DS_Store
 tmp/
 test_env/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Backup/copy files
+* copy.py
+*\ copy.py
 **/.DS_Store
 **/.DS_Store
 
