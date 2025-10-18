@@ -39,6 +39,7 @@ class BrowserManager:
         self.browser: Optional[Browser] = None
         self._active_pages = 0
         self._sessions: Dict[str, SessionInfo] = {}
+        self._sessions_lock = asyncio.Lock()
         self._session_ttl = timedelta(minutes=session_ttl_minutes)
         self._cleanup_task: Optional[asyncio.Task] = None
 
@@ -64,7 +65,10 @@ class BrowserManager:
                 pass
 
         # Close all sessions
-        for session_id in list(self._sessions.keys()):
+        async with self._sessions_lock:
+            session_ids = list(self._sessions.keys())
+
+        for session_id in session_ids:
             await self.close_session(session_id)
 
         if self.browser:
@@ -79,12 +83,16 @@ class BrowserManager:
             try:
                 await asyncio.sleep(60)  # Check every minute
                 now = datetime.utcnow()
-                expired = []
 
-                for session_id, session_info in self._sessions.items():
-                    if now - session_info.last_used > self._session_ttl:
-                        expired.append(session_id)
+                # Collect expired session IDs while holding the lock
+                async with self._sessions_lock:
+                    expired = [
+                        session_id
+                        for session_id, session_info in self._sessions.items()
+                        if now - session_info.last_used > self._session_ttl
+                    ]
 
+                # Close sessions outside the lock to avoid deadlock
                 for session_id in expired:
                     logger.info(f"Cleaning up expired session: {session_id}")
                     await self.close_session(session_id)
@@ -137,7 +145,9 @@ class BrowserManager:
             context_options["timezone_id"] = timezone
 
         context = await self.browser.new_context(**context_options)
-        self._sessions[session_id] = SessionInfo(session_id, context)
+
+        async with self._sessions_lock:
+            self._sessions[session_id] = SessionInfo(session_id, context)
 
         logger.info(f"Created new session: {session_id}")
         return session_id
@@ -148,13 +158,22 @@ class BrowserManager:
         Args:
             session_id: Session ID to close
         """
-        if session_id in self._sessions:
+        async with self._sessions_lock:
+            if session_id not in self._sessions:
+                logger.warning(f"Session not found: {session_id}")
+                return
+
             session_info = self._sessions[session_id]
-            await session_info.context.close()
-            del self._sessions[session_id]
-            logger.info(f"Closed session: {session_id}")
-        else:
-            logger.warning(f"Session not found: {session_id}")
+
+        # Close context outside the lock to avoid blocking other operations
+        await session_info.context.close()
+
+        async with self._sessions_lock:
+            # Remove from dict after closing
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+
+        logger.info(f"Closed session: {session_id}")
 
     async def add_cookies(self, session_id: str, cookies: Dict[str, str], url: str):
         """Add cookies to a session.
@@ -164,12 +183,14 @@ class BrowserManager:
             cookies: Cookies to add
             url: URL for cookie context
         """
-        if session_id not in self._sessions:
-            raise ValueError(f"Session not found: {session_id}")
+        async with self._sessions_lock:
+            if session_id not in self._sessions:
+                raise ValueError(f"Session not found: {session_id}")
 
-        session_info = self._sessions[session_id]
-        session_info.touch()
+            session_info = self._sessions[session_id]
+            session_info.touch()
 
+        # Add cookies outside the lock to avoid blocking
         await session_info.context.add_cookies(
             [{"name": k, "value": v, "url": url} for k, v in cookies.items()]
         )
@@ -183,12 +204,14 @@ class BrowserManager:
         Returns:
             Dictionary of cookies
         """
-        if session_id not in self._sessions:
-            raise ValueError(f"Session not found: {session_id}")
+        async with self._sessions_lock:
+            if session_id not in self._sessions:
+                raise ValueError(f"Session not found: {session_id}")
 
-        session_info = self._sessions[session_id]
-        session_info.touch()
+            session_info = self._sessions[session_id]
+            session_info.touch()
 
+        # Get cookies outside the lock to avoid blocking
         cookies = await session_info.context.cookies()
         return {cookie["name"]: cookie["value"] for cookie in cookies}
 
@@ -239,12 +262,14 @@ class BrowserManager:
 
             # Use existing session or create temporary context
             if session_id:
-                if session_id not in self._sessions:
-                    raise ValueError(f"Session not found: {session_id}")
+                async with self._sessions_lock:
+                    if session_id not in self._sessions:
+                        raise ValueError(f"Session not found: {session_id}")
 
-                session_info = self._sessions[session_id]
-                session_info.touch()
-                session_info.page_count += 1
+                    session_info = self._sessions[session_id]
+                    session_info.touch()
+                    session_info.page_count += 1
+
                 context = session_info.context
                 should_close_context = False
             else:
