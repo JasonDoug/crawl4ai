@@ -24,10 +24,15 @@ class BrowserRequest(BaseModel):
     action: PageAction = Field(
         default=PageAction.NAVIGATE, description="Action to perform"
     )
-    headless: bool = Field(default=True, description="Run in headless mode")
+    session_id: Optional[str] = Field(
+        default=None, description="Session ID for persistent context"
+    )
     timeout: int = Field(default=30, ge=1, le=300, description="Timeout in seconds")
     wait_time: float = Field(
-        default=0, ge=0, le=30, description="Wait time after action"
+        default=0, ge=0, le=30, description="Wait time after action in seconds"
+    )
+    wait_for_selector: Optional[str] = Field(
+        default=None, description="CSS selector to wait for before action"
     )
     user_agent: Optional[str] = Field(default=None, description="Custom user agent")
     viewport: Optional[Dict[str, int]] = Field(
