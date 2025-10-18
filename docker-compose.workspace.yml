@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Browser Management Service
@@ -29,6 +29,19 @@ services:
       - LOG_LEVEL=INFO
     depends_on:
       - redis
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # Markdown Generation Service
+  markdown-service:
+    build:
+      context: .
+      dockerfile: services/markdown-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - LOG_LEVEL=INFO
     restart: unless-stopped
     networks:
       - crawl4ai-network
