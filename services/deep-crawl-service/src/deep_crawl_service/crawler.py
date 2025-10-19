@@ -151,9 +151,10 @@ class DeepCrawlCoordinator:
         """
         try:
             # Step 1: Navigate to URL using browser service
+            payload = {**(browser_config or {}), "url": url}
             browser_response = await self.http_client.post(
                 f"{self.browser_service_url}/navigate",
-                json={"url": url, **(browser_config or {})},
+                json=payload,
             )
             browser_response.raise_for_status()
             browser_data = browser_response.json()
@@ -169,9 +170,10 @@ class DeepCrawlCoordinator:
             html = browser_data.get("html", "")
 
             # Step 2: Scrape content
+            scrape_payload = {**(scraping_config or {}), "html": html, "url": url}
             scrape_response = await self.http_client.post(
                 f"{self.scraping_service_url}/scrape",
-                json={"html": html, "url": url, **(scraping_config or {})},
+                json=scrape_payload,
             )
             scrape_response.raise_for_status()
             scrape_data = scrape_response.json()

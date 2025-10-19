@@ -87,9 +87,9 @@ class XPathExtractor:
             for element in elements:
                 result = ExtractionResult()
 
-                # Handle text nodes
-                if isinstance(element, str):
-                    result.text = element
+                # Handle scalar values (text, numbers, booleans)
+                if isinstance(element, (str, int, float, bool)):
+                    result.text = str(element)
                     results.append(result)
                     continue
 
