@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Browser Management Service
@@ -29,6 +29,74 @@ services:
       - LOG_LEVEL=INFO
     depends_on:
       - redis
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # Markdown Generation Service
+  markdown-service:
+    build:
+      context: .
+      dockerfile: services/markdown-service/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # Deep Crawling Service
+  deep-crawl-service:
+    build:
+      context: .
+      dockerfile: services/deep-crawl-service/Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      - LOG_LEVEL=INFO
+    depends_on:
+      - browser-service
+      - content-scraping-service
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # Extraction Service
+  extraction-service:
+    build:
+      context: .
+      dockerfile: services/extraction-service/Dockerfile
+    ports:
+      - "8006:8006"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # URL Discovery Service
+  url-discovery-service:
+    build:
+      context: .
+      dockerfile: services/url-discovery-service/Dockerfile
+    ports:
+      - "8007:8007"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # Content Filter Service
+  content-filter-service:
+    build:
+      context: .
+      dockerfile: services/content-filter-service/Dockerfile
+    ports:
+      - "8008:8008"
+    environment:
+      - LOG_LEVEL=INFO
     restart: unless-stopped
     networks:
       - crawl4ai-network
