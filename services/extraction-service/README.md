@@ -13,12 +13,12 @@ Microservice for extracting data from HTML using CSS selectors, XPath, and regul
 ## API Endpoints
 
 ### Health Check
-```
+```http
 GET /health
 ```
 
 ### CSS Extraction
-```
+```http
 POST /extract/css
 ```
 
@@ -34,7 +34,7 @@ POST /extract/css
 ```
 
 ### XPath Extraction
-```
+```http
 POST /extract/xpath
 ```
 
@@ -50,7 +50,7 @@ POST /extract/xpath
 ```
 
 ### Regex Extraction
-```
+```http
 POST /extract/regex
 ```
 

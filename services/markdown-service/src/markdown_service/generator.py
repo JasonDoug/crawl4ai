@@ -56,13 +56,18 @@ class CustomHTML2Text(HTML2Text):
 
     def update_params(self, **kwargs):
         """Update parameters and set preserved tags."""
-        for key, value in kwargs.items():
-            if key == "preserve_tags":
-                self.preserve_tags = set(value)
-            elif key == "handle_code_in_pre":
-                self.handle_code_in_pre = value
-            else:
-                setattr(self, key, value)
+        # Handle custom parameters
+        preserve_tags = kwargs.pop("preserve_tags", None)
+        handle_code_in_pre = kwargs.pop("handle_code_in_pre", None)
+
+        # Call parent to handle base parameters
+        super().update_params(**kwargs)
+
+        # Apply custom parameters
+        if preserve_tags is not None:
+            self.preserve_tags = set(preserve_tags)
+        if handle_code_in_pre is not None:
+            self.handle_code_in_pre = handle_code_in_pre
 
     def handle_tag(self, tag, attrs, start):
         # Handle preserved tags
@@ -100,8 +105,12 @@ class CustomHTML2Text(HTML2Text):
                 self.preserved_content.append(f"</{tag}>")
             return
 
+        # Handle link tags
+        if tag == "a":
+            self.inside_link = start
+            super().handle_tag(tag, attrs, start)
         # Handle pre tags
-        if tag == "pre":
+        elif tag == "pre":
             if start:
                 self.o("```\n")  # Markdown code block start
                 self.inside_pre = True

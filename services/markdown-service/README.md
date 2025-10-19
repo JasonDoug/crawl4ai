@@ -13,14 +13,14 @@ Microservice for generating markdown from HTML content with citation support.
 ## API Endpoints
 
 ### Health Check
-```
+```http
 GET /health
 ```
 
 Returns service health status.
 
 ### Generate Markdown
-```
+```http
 POST /generate
 ```
 

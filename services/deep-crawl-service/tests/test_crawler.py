@@ -130,7 +130,7 @@ class TestCrawlStrategies:
         await coord.close()
 
     @pytest.mark.asyncio
-    async def test_crawl_bfs_basic(self, coordinator, monkeypatch):
+    async def test_crawl_bfs_basic(self, coordinator):
         """Test basic BFS crawl logic (mocked)."""
         # This would require mocking the HTTP calls to browser/scraping services
         # For now, just test that the method exists and has correct signature
