@@ -62,6 +62,45 @@ services:
     networks:
       - crawl4ai-network
 
+  # Extraction Service
+  extraction-service:
+    build:
+      context: .
+      dockerfile: services/extraction-service/Dockerfile
+    ports:
+      - "8006:8006"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # URL Discovery Service
+  url-discovery-service:
+    build:
+      context: .
+      dockerfile: services/url-discovery-service/Dockerfile
+    ports:
+      - "8007:8007"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
+  # Content Filter Service
+  content-filter-service:
+    build:
+      context: .
+      dockerfile: services/content-filter-service/Dockerfile
+    ports:
+      - "8008:8008"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - crawl4ai-network
+
   # Redis for caching and message queue
   redis:
     image: redis:7-alpine
